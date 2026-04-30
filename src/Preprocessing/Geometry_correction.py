@@ -3,12 +3,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
-
-#carga de datos
 image_path = "data/ticket-2.jpeg"
 image = cv2.imread(image_path)
 
-image_canvas = image.copy() 
+image_canvas = image.copy()  
 image_gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
 
