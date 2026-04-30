@@ -2,7 +2,6 @@ import cv2
 import numpy as np
 import matplotlib.pyplot as plt
 
-<<<<<<< HEAD:src/Geometry_correction.py
 # carga de datos
 image_path = "../data/ticket-2.jpeg"
 image = cv2.imread(image_path)
@@ -10,13 +9,6 @@ image = cv2.imread(image_path)
 image_canvas = image.copy()
 
 # gris
-=======
-
-image_path = "data/ticket-2.jpeg"
-image = cv2.imread(image_path)
-
-image_canvas = image.copy()  
->>>>>>> 176c3c212105ccb064fa9d4c34073df09b1d89b4:src/Preprocessing/Geometry_correction.py
 image_gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
 # blur
