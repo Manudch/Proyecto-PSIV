@@ -1,13 +1,18 @@
 import cv2
 import numpy as np
 import matplotlib.pyplot as plt
+from pathlib import Path
 
-# carga de datos
-image_path = "../data/ticket-2.jpeg"
-image = cv2.imread(image_path)
+
+BASE_DIR = Path(__file__).resolve().parent.parent.parent 
+image_path = BASE_DIR / "data" / "ticket-2.jpeg"
+
+image = cv2.imread(str(image_path))
+
+if image is None:
+    raise FileNotFoundError(f"No se pudo cargar la imagen: {image_path}")
 
 image_canvas = image.copy()
-
 # gris
 image_gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
