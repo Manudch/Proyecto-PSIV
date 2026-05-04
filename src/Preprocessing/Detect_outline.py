@@ -1,8 +1,5 @@
 import cv2 as cv
 import numpy as np
-
-img = cv.imread('')
-=======
 import matplotlib.pyplot as plt
 from pathlib import Path
 
@@ -80,4 +77,3 @@ plt.title("Hough Lines")
 plt.imshow(cv2.cvtColor(image_canvas, cv2.COLOR_BGR2RGB))
 
 plt.show()
->>>>>>> c760dd0177baa3a47fd7f36c40f95e0981d7c912
