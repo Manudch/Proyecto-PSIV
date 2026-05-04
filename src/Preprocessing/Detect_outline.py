@@ -1,13 +1,21 @@
-import cv2
+import cv2 as cv
 import numpy as np
-import matplotlib.pyplot as plt
 
-# carga de datos
-image_path = "../data/ticket-2.jpeg"
-image = cv2.imread(image_path)
+img = cv.imread('')
+=======
+import matplotlib.pyplot as plt
+from pathlib import Path
+
+
+BASE_DIR = Path(__file__).resolve().parent.parent.parent 
+image_path = BASE_DIR / "data" / "ticket-2.jpeg"
+
+image = cv2.imread(str(image_path))
+
+if image is None:
+    raise FileNotFoundError(f"No se pudo cargar la imagen: {image_path}")
 
 image_canvas = image.copy()
-
 # gris
 image_gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
@@ -72,3 +80,4 @@ plt.title("Hough Lines")
 plt.imshow(cv2.cvtColor(image_canvas, cv2.COLOR_BGR2RGB))
 
 plt.show()
+>>>>>>> c760dd0177baa3a47fd7f36c40f95e0981d7c912
