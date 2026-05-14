@@ -1,0 +1,52 @@
+{
+  "tienda": "BELL,",
+  "fecha": null,
+  "total": null,
+  "productos": [
+    {
+      "texto_raw": "Boe 21 026",
+      "nombre": "Boe 21 026",
+      "precio": 0.26
+    },
+    {
+      "texto_raw": "123",
+      "nombre": "123",
+      "precio": 1.23
+    },
+    {
+      "texto_raw": "160",
+      "nombre": "160",
+      "precio": 1.6
+    },
+    {
+      "texto_raw": "185 we",
+      "nombre": "185 we",
+      "precio": 1.85
+    },
+    {
+      "texto_raw": "MINI PEANUT CUPS 190 970",
+      "nombre": "MINI PEANUT CUPS 190 970",
+      "precio": 1.9
+    },
+    {
+      "texto_raw": "ste 363",
+      "nombre": "ste 363",
+      "precio": 3.63
+    },
+    {
+      "texto_raw": "co ax 558 02",
+      "nombre": "co ax 558 02",
+      "precio": 5.58
+    },
+    {
+      "texto_raw": "4313",
+      "nombre": "4313",
+      "precio": 43.13
+    },
+    {
+      "texto_raw": "Import 4724",
+      "nombre": "Import 4724",
+      "precio": 47.24
+    }
+  ]
+}

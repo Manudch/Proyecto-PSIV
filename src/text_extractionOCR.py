@@ -20,33 +20,31 @@ OCR_ENGINE = None
 USE_EASYOCR = False
 
 try:
-    import pytesseract
-    from pytesseract import Output
-
-    TESSDATA_PATH = r"C:\Program Files\Tesseract-OCR\tessdata"
-    for path in [r"C:\Program Files\Tesseract-OCR\tesseract.exe",
-                 r"C:\Program Files (x86)\Tesseract-OCR\tesseract.exe"]:
-        if Path(path).exists():
-            pytesseract.pytesseract.tesseract_cmd = path
-            break
-
-    pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
-    import os
-    os.environ['TESSDATA_PREFIX'] = TESSDATA_PATH
-
-    pytesseract.get_tesseract_version()
-    OCR_ENGINE = "tesseract"
-    print("[INFO] Usando Tesseract OCR")
-except Exception:
-    pass
-
-if OCR_ENGINE is None:
+    import easyocr
+    OCR_ENGINE = "easyocr"
+    print("[INFO] Usando EasyOCR (español)")
+    reader = easyocr.Reader(['es', 'en'], gpu=False)
+except Exception as e:
+    print(f"[WARN] EasyOCR no disponible: {e}")
     try:
-        import easyocr
-        OCR_ENGINE = "easyocr"
-        print("[INFO] Tesseract no disponible, usando EasyOCR")
-        reader = easyocr.Reader(['es', 'en'], gpu=False)
-    except Exception as e:
+        import pytesseract
+        from pytesseract import Output
+
+        TESSDATA_PATH = r"C:\Program Files\Tesseract-OCR\tessdata"
+        for path in [r"C:\Program Files\Tesseract-OCR\tesseract.exe",
+                     r"C:\Program Files (x86)\Tesseract-OCR\tesseract.exe"]:
+            if Path(path).exists():
+                pytesseract.pytesseract.tesseract_cmd = path
+                break
+
+        pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+        import os
+        os.environ['TESSDATA_PREFIX'] = TESSDATA_PATH
+
+        pytesseract.get_tesseract_version()
+        OCR_ENGINE = "tesseract"
+        print("[INFO] Usando Tesseract OCR")
+    except Exception as e2:
         raise RuntimeError("No se encontró OCR. Instala tesseract o easyocr.")
 
 
@@ -55,11 +53,18 @@ def preprocesar_ocr(img):
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     else:
         gray = img.copy()
+    
+    h, w = gray.shape
+    if h > 3000:
+        scale = 1500 / h
+        gray = cv2.resize(gray, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA)
+    
     try:
         clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
         gray_eq = clahe.apply(gray)
     except Exception:
         gray_eq = gray
+    
     blurred = cv2.GaussianBlur(gray_eq, (3, 3), 0)
     _, binary = cv2.threshold(blurred, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
     return binary
@@ -102,11 +107,20 @@ def ocr_bloque(img_bloque):
 
 
 def extraer_precio(texto):
-    patrones = [r'(\d+[.,]\d{2})\s*$', r'(\d+[.,]\d{2})\s*[€$]', r'(\d{1,3}(?:[.,]\d{3})*[.,]\d{2})']
+    texto_limpio = texto.replace(' ', '').replace(',', '.')
+    patrones = [
+        r'(\d+\.\d{2})',
+        r'(\d+,\d{2})',
+        r'(\d+\.\d{3})',
+    ]
     for patron in patrones:
-        match = re.search(patron, texto)
+        match = re.search(patron, texto_limpio)
         if match:
-            return match.group(1).replace(',', '.')
+            precio = match.group(1).replace(',', '.')
+            if '.' in precio:
+                parte_entera, parte_decimal = precio.rsplit('.', 1)
+                if len(parte_decimal) == 2:
+                    return precio
     return None
 
 
@@ -121,19 +135,38 @@ def extraer_fecha(texto):
 
 def extraer_total(texto):
     texto_lower = texto.lower()
-    if any(k in texto_lower for k in ['total', 'suma', 'importe', 'a pagar']):
-        return extraer_precio(texto)
+    if any(k in texto_lower for k in ['total', 'suma', 'importe', 'a pagar', 'importe']):
+        precio = extraer_precio(texto)
+        if precio:
+            return precio
     return None
 
 
 def procesar_linea_producto(linea):
     resultado = {'texto_raw': linea, 'nombre': None, 'precio': None}
-    precio = extraer_precio(linea)
+    
+    linea_limpia = re.sub(r'[^\w\s€.,]', '', linea)
+    linea_limpia = re.sub(r'\s+', ' ', linea_limpia).strip()
+    
+    precio = extraer_precio(linea_limpia)
+    
     if precio:
         resultado['precio'] = float(precio)
-        idx = linea.rfind(precio.replace('.', ','))
+        
+        precio_formats = [precio, precio.replace('.', ','), precio.replace('.', ' ')]
+        idx = -1
+        for pf in precio_formats:
+            temp_idx = linea_limpia.rfind(pf)
+            if temp_idx > idx:
+                idx = temp_idx
+        
         if idx > 0:
-            resultado['nombre'] = re.sub(r'^\*+', '', linea[:idx].strip()).strip()
+            nombre_raw = linea_limpia[:idx].strip()
+            nombre_limpio = re.sub(r'[*_|‾\-–—]+$', '', nombre_raw)
+            nombre_limpio = re.sub(r'^\d+\s+', '', nombre_limpio)
+            if nombre_limpio and len(nombre_limpio) > 1:
+                resultado['nombre'] = nombre_limpio
+    
     return resultado
 
 
@@ -150,19 +183,25 @@ def procesar_ticket(image_path, guardar_ocr=True, debug=True):
     if img is None:
         raise ValueError(f"No se pudo cargar: {image_path}")
 
-    if HAS_SEGMENTATION:
-        img_seg, bloques, etiquetas = segmentar(str(image_path))
-    else:
+    try:
+        if HAS_SEGMENTATION:
+            img_seg, bloques, etiquetas = segmentar(str(image_path))
+        else:
+            raise Exception("Sin módulo de segmentación")
+    except Exception as e:
         h, w = img.shape[:2]
         bloques = [(0, h // 3), (h // 3, 2 * h // 3), (2 * h // 3, h)]
         etiquetas = ['CABECERA', 'PRODUCTO', 'PIE']
 
     resultados = []
     datos_ticket = {'tienda': None, 'fecha': None, 'total': None, 'productos': []}
+    todas_lineas = []
 
     for i, ((y0, y1), etiqueta) in enumerate(zip(bloques, etiquetas)):
         recorte = img[y0:y1, :]
         lineas = ocr_bloque(recorte)
+        
+        todas_lineas.extend([(l, etiqueta) for l in lineas])
 
         if guardar_ocr:
             output_dir = BASE_DIR / "data" / "bloques_ocr"
@@ -173,18 +212,61 @@ def procesar_ticket(image_path, guardar_ocr=True, debug=True):
         resultados.append(bloque_info)
 
         if etiqueta == 'CABECERA' and lineas:
-            datos_ticket['tienda'] = lineas[0]
-        elif etiqueta == 'PRODUCTO':
-            for linea in lineas:
-                prod = procesar_linea_producto(linea)
-                if prod['nombre'] or prod['precio']:
-                    datos_ticket['productos'].append(prod)
-        elif etiqueta in ['PIE', 'SEPARADOR']:
+            for l in lineas:
+                if l.strip() and not l.strip().isdigit():
+                    datos_ticket['tienda'] = l.strip()
+                    break
+        elif etiqueta in ['PRODUCTO', 'SEPARADOR']:
             for linea in lineas:
                 if not datos_ticket['fecha']:
                     datos_ticket['fecha'] = extraer_fecha(linea)
                 if not datos_ticket['total']:
                     datos_ticket['total'] = extraer_total(linea)
+                prod = procesar_linea_producto(linea)
+                if prod['precio'] and prod['precio'] > 0 and prod['precio'] < 1000:
+                    if prod not in datos_ticket['productos']:
+                        datos_ticket['productos'].append(prod)
+        elif etiqueta == 'PIE':
+            for linea in lineas:
+                if not datos_ticket['fecha']:
+                    datos_ticket['fecha'] = extraer_fecha(linea)
+                if not datos_ticket['total']:
+                    datos_ticket['total'] = extraer_total(linea)
+
+    productos_encontrados = {}
+    for linea, _ in todas_lineas:
+        precio = extraer_precio(linea)
+        if precio:
+            try:
+                precio_float = float(precio)
+                if 0.01 < precio_float < 500:
+                    nombre_candidato = re.sub(r'[^\w\s]', '', linea.replace(precio, '').replace(',', '.')).strip()
+                    nombre_candidato = re.sub(r'\s+', ' ', nombre_candidato)
+                    nombre_candidato = re.sub(r'^(IVA|Total|Importe|TOTAL|Subtotal|Visa|CajaBank|Tarjeta)\s*', '', nombre_candidato, flags=re.IGNORECASE)
+                    
+                    if nombre_candidato and len(nombre_candidato) > 1:
+                        if precio_float not in productos_encontrados or len(nombre_candidato) > len(productos_encontrados.get(precio_float, '')):
+                            productos_encontrados[precio_float] = nombre_candidato
+            except (ValueError, AttributeError):
+                pass
+    
+    for precio, nombre in productos_encontrados.items():
+        datos_ticket['productos'].append({
+            'texto_raw': nombre,
+            'nombre': nombre,
+            'precio': precio
+        })
+    
+    datos_ticket['productos'].sort(key=lambda x: x['precio'] if x['precio'] else 0)
+    
+    seen = set()
+    productos_unicos = []
+    for p in datos_ticket['productos']:
+        key = (p.get('nombre'), p.get('precio'))
+        if key not in seen:
+            seen.add(key)
+            productos_unicos.append(p)
+    datos_ticket['productos'] = productos_unicos
 
     if debug:
         print(f"{'='*60}")
